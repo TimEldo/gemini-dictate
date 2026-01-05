@@ -18,25 +18,42 @@
     <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-xl border border-slate-200">
         <h1 class="text-2xl font-bold text-slate-800 mb-6 text-center">Gemini Dictée Pro</h1>
         
-        <div class="mb-6">
-            <label class="block text-sm font-medium text-slate-600 mb-1">Clé API Gemini</label>
-            <input type="password" id="apiKey" placeholder="Collez votre clé AI Studio ici..." 
-                class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+        <div id="apiKeySection" class="mb-6">
+            <div id="apiKeyInputContainer">
+                <label class="block text-sm font-medium text-slate-600 mb-1">Clé API Gemini</label>
+                <input type="password" id="apiKey" placeholder="Collez votre clé AI Studio ici..."
+                    class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+            </div>
+            <div id="apiKeyButton" class="hidden">
+                <button id="changeApiKeyBtn" class="w-full px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-all border border-slate-300">
+                    🔑 Modifier la clé API
+                </button>
+            </div>
         </div>
 
         <div class="flex flex-col items-center justify-center mb-8">
-            <button id="micBtn" class="w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 flex items-center justify-center transition-all shadow-lg group relative">
-                <svg id="micIcon" xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            <div class="relative">
+                <button id="micBtn" class="w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 flex items-center justify-center transition-all shadow-lg group relative z-10">
+                    <svg id="micIcon" xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                    <div id="recordingWave" class="hidden absolute inset-0 rounded-full bg-red-500 animate-ping opacity-50"></div>
+                </button>
+                <svg id="spinningRing" class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 pointer-events-none animate-pulse" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="#3b82f6" stroke-width="3" opacity="0.5"/>
                 </svg>
-                <div id="recordingWave" class="hidden absolute inset-0 rounded-full bg-red-500 animate-ping opacity-50"></div>
-            </button>
+            </div>
             <p id="status" class="mt-4 text-sm font-medium text-slate-500 uppercase tracking-widest">Prêt à enregistrer</p>
         </div>
 
-        <div>
-            <label class="block text-sm font-medium text-slate-600 mb-1">Transcription (copiée auto.)</label>
-            <textarea id="resultArea" disabled 
+        <div id="transcriptionSection" class="hidden">
+            <div class="flex justify-between items-center mb-1">
+                <label class="block text-sm font-medium text-slate-600">Transcription</label>
+                <button id="copyBtn" class="text-xs px-3 py-1 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-medium transition-all">
+                    📋 Copier
+                </button>
+            </div>
+            <textarea id="resultArea" disabled
                 class="w-full h-40 p-4 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 resize-none font-medium"
                 placeholder="Le texte apparaîtra ici après l'enregistrement..."></textarea>
         </div>
@@ -59,15 +76,13 @@
         const resultArea = document.getElementById('resultArea');
         const recordingWave = document.getElementById('recordingWave');
         const apiKeyInput = document.getElementById('apiKey');
+        const spinningRing = document.getElementById('spinningRing');
+        const apiKeyInputContainer = document.getElementById('apiKeyInputContainer');
+        const apiKeyButton = document.getElementById('apiKeyButton');
+        const changeApiKeyBtn = document.getElementById('changeApiKeyBtn');
+        const transcriptionSection = document.getElementById('transcriptionSection');
+        const copyBtn = document.getElementById('copyBtn');
 
-        // Couleurs Google pour l'animation
-        const googleColors = [
-            { bg: 'bg-red-500', hover: 'hover:bg-red-600' },
-            { bg: 'bg-green-500', hover: 'hover:bg-green-600' },
-            { bg: 'bg-blue-500', hover: 'hover:bg-blue-600' },
-            { bg: 'bg-yellow-500', hover: 'hover:bg-yellow-600' }
-        ];
-        let colorIndex = 0;
 
         // Fonction simple de chiffrement/déchiffrement (XOR avec clé dérivée du navigateur)
         function encryptKey(key) {
@@ -100,28 +115,74 @@
             }
         }
 
-        // Animation des couleurs Google
+        // Animation simple du cercle bleu avec le bouton
         function startGoogleColorAnimation() {
-            stopGoogleColorAnimation();
-            googleColorInterval = setInterval(() => {
-                const color = googleColors[colorIndex];
-                setButtonColor(color.bg, color.hover);
-                colorIndex = (colorIndex + 1) % googleColors.length;
-            }, 500);
+            spinningRing.classList.remove('hidden');
+            micBtn.classList.add('animate-pulse');
+            setButtonColor('bg-blue-500', 'hover:bg-blue-600');
         }
 
         function stopGoogleColorAnimation() {
-            if (googleColorInterval) {
-                clearInterval(googleColorInterval);
-                googleColorInterval = null;
+            spinningRing.classList.add('hidden');
+            micBtn.classList.remove('animate-pulse');
+        }
+
+        // Fonction pour basculer l'affichage de la clé API
+        function toggleApiKeyDisplay(hasKey) {
+            if (hasKey) {
+                apiKeyInputContainer.classList.add('hidden');
+                apiKeyButton.classList.remove('hidden');
+            } else {
+                apiKeyInputContainer.classList.remove('hidden');
+                apiKeyButton.classList.add('hidden');
             }
         }
 
         // Charger la clé si elle est dans le localStorage
         const storedKey = localStorage.getItem('gemini_key_enc');
         if (storedKey) {
-            apiKeyInput.value = decryptKey(storedKey);
+            const decryptedKey = decryptKey(storedKey);
+            apiKeyInput.value = decryptedKey;
+            if (decryptedKey) {
+                toggleApiKeyDisplay(true);
+            }
         }
+
+        // Gérer le clic sur "Modifier la clé API"
+        changeApiKeyBtn.onclick = () => {
+            toggleApiKeyDisplay(false);
+            apiKeyInput.focus();
+        };
+
+        // Masquer le bouton et sauvegarder quand on modifie la clé
+        apiKeyInput.addEventListener('input', () => {
+            const apiKey = apiKeyInput.value.trim();
+            if (apiKey && isValidApiKey(apiKey)) {
+                localStorage.setItem('gemini_key_enc', encryptKey(apiKey));
+            }
+        });
+
+        // Gérer le bouton de copie
+        copyBtn.onclick = async () => {
+            const text = resultArea.value;
+            if (text) {
+                try {
+                    await navigator.clipboard.writeText(text);
+                    const originalText = copyBtn.innerHTML;
+                    copyBtn.innerHTML = '✓ Copié';
+                    copyBtn.classList.replace('bg-blue-500', 'bg-green-500');
+                    copyBtn.classList.replace('hover:bg-blue-600', 'hover:bg-green-600');
+                    setTimeout(() => {
+                        copyBtn.innerHTML = originalText;
+                        copyBtn.classList.replace('bg-green-500', 'bg-blue-500');
+                        copyBtn.classList.replace('hover:bg-green-600', 'hover:bg-blue-600');
+                    }, 2000);
+                } catch (err) {
+                    console.error('Erreur de copie:', err);
+                    alert('Impossible de copier dans le presse-papier');
+                }
+            }
+        };
 
         micBtn.onclick = async () => {
             if (!isRecording) {
@@ -144,8 +205,9 @@
                 return;
             }
 
-            // Sauvegarder la clé de manière chiffrée
+            // Sauvegarder la clé de manière chiffrée et masquer le champ
             localStorage.setItem('gemini_key_enc', encryptKey(apiKey));
+            toggleApiKeyDisplay(true);
 
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -198,7 +260,7 @@
                 const genAI = new GoogleGenerativeAI(apiKeyInput.value);
                 const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
-                const prompt = "Transcris cet audio précisément. Nettoie les hésitations (euh, etc.), ajoute la ponctuation correcte et renvoie uniquement le texte transcrit sans commentaires. Vérifie les doubles mots, si une phrase est prononcées et ne veut rien dire, tu peux l'ajuster pour que ça ressemble à quelque chose de correct.";
+                const prompt = "Transcris cet audio précisément. Nettoie les hésitations (euh, etc.), ajoute la ponctuation correcte et renvoie uniquement le texte transcrit sans commentaires. Le texte retranscrit doit être le plus proche possible de ce qui a été dicté.";
 
                 const result = await model.generateContent([
                     prompt,
@@ -212,6 +274,7 @@
 
                 // Affichage et copie
                 resultArea.value = text;
+                transcriptionSection.classList.remove('hidden');
                 await navigator.clipboard.writeText(text);
 
                 statusText.innerText = "Terminé & Copié !";
