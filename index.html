@@ -25,11 +25,11 @@
         </div>
 
         <div class="flex flex-col items-center justify-center mb-8">
-            <button id="micBtn" class="w-20 h-20 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center transition-all shadow-lg group relative">
+            <button id="micBtn" class="w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 flex items-center justify-center transition-all shadow-lg group relative">
                 <svg id="micIcon" xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
-                <div id="recordingWave" class="hidden absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-50"></div>
+                <div id="recordingWave" class="hidden absolute inset-0 rounded-full bg-red-500 animate-ping opacity-50"></div>
             </button>
             <p id="status" class="mt-4 text-sm font-medium text-slate-500 uppercase tracking-widest">Prêt à enregistrer</p>
         </div>
@@ -52,6 +52,7 @@
         let mediaRecorder;
         let audioChunks = [];
         let isRecording = false;
+        let googleColorInterval = null;
 
         const micBtn = document.getElementById('micBtn');
         const statusText = document.getElementById('status');
@@ -59,8 +60,68 @@
         const recordingWave = document.getElementById('recordingWave');
         const apiKeyInput = document.getElementById('apiKey');
 
+        // Couleurs Google pour l'animation
+        const googleColors = [
+            { bg: 'bg-red-500', hover: 'hover:bg-red-600' },
+            { bg: 'bg-green-500', hover: 'hover:bg-green-600' },
+            { bg: 'bg-blue-500', hover: 'hover:bg-blue-600' },
+            { bg: 'bg-yellow-500', hover: 'hover:bg-yellow-600' }
+        ];
+        let colorIndex = 0;
+
+        // Fonction simple de chiffrement/déchiffrement (XOR avec clé dérivée du navigateur)
+        function encryptKey(key) {
+            const salt = navigator.userAgent + window.location.hostname;
+            return btoa(String.fromCharCode(...new TextEncoder().encode(key).map((b, i) => b ^ salt.charCodeAt(i % salt.length))));
+        }
+
+        function decryptKey(encrypted) {
+            try {
+                const salt = navigator.userAgent + window.location.hostname;
+                const decoded = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+                return new TextDecoder().decode(decoded.map((b, i) => b ^ salt.charCodeAt(i % salt.length)));
+            } catch {
+                return '';
+            }
+        }
+
+        // Validation de la clé API Gemini
+        function isValidApiKey(key) {
+            return key && key.length >= 30 && /^[A-Za-z0-9_-]+$/.test(key);
+        }
+
+        // Fonction pour changer la couleur du bouton
+        function setButtonColor(colorClass, hoverClass = null) {
+            // Retirer toutes les classes de couleur existantes
+            micBtn.className = micBtn.className.replace(/bg-\w+-\d+/g, '').replace(/hover:bg-\w+-\d+/g, '');
+            micBtn.classList.add(colorClass);
+            if (hoverClass) {
+                micBtn.classList.add(hoverClass);
+            }
+        }
+
+        // Animation des couleurs Google
+        function startGoogleColorAnimation() {
+            stopGoogleColorAnimation();
+            googleColorInterval = setInterval(() => {
+                const color = googleColors[colorIndex];
+                setButtonColor(color.bg, color.hover);
+                colorIndex = (colorIndex + 1) % googleColors.length;
+            }, 500);
+        }
+
+        function stopGoogleColorAnimation() {
+            if (googleColorInterval) {
+                clearInterval(googleColorInterval);
+                googleColorInterval = null;
+            }
+        }
+
         // Charger la clé si elle est dans le localStorage
-        apiKeyInput.value = localStorage.getItem('gemini_key') || '';
+        const storedKey = localStorage.getItem('gemini_key_enc');
+        if (storedKey) {
+            apiKeyInput.value = decryptKey(storedKey);
+        }
 
         micBtn.onclick = async () => {
             if (!isRecording) {
@@ -71,8 +132,20 @@
         };
 
         async function startRecording() {
-            if (!apiKeyInput.value) return alert("Veuillez entrer une clé API !");
-            localStorage.setItem('gemini_key', apiKeyInput.value);
+            const apiKey = apiKeyInput.value.trim();
+
+            if (!apiKey) {
+                alert("Veuillez entrer une clé API !");
+                return;
+            }
+
+            if (!isValidApiKey(apiKey)) {
+                alert("Format de clé API invalide. Vérifiez votre clé Gemini.");
+                return;
+            }
+
+            // Sauvegarder la clé de manière chiffrée
+            localStorage.setItem('gemini_key_enc', encryptKey(apiKey));
 
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -84,26 +157,29 @@
 
                 mediaRecorder.start();
                 isRecording = true;
-                
-                // UI
+
+                // UI - Rouge pendant l'enregistrement
                 statusText.innerText = "Enregistrement en cours...";
-                statusText.classList.replace('text-slate-500', 'text-red-500');
+                statusText.className = 'mt-4 text-sm font-medium text-red-500 uppercase tracking-widest';
                 recordingWave.classList.remove('hidden');
-                micBtn.classList.replace('bg-blue-600', 'bg-red-600');
+                setButtonColor('bg-red-600', 'hover:bg-red-700');
             } catch (err) {
-                alert("Erreur micro : " + err);
+                console.error("Erreur micro:", err);
+                alert("Impossible d'accéder au microphone. Vérifiez les permissions.");
             }
         }
 
         function stopRecording() {
             mediaRecorder.stop();
             isRecording = false;
-            
+
             // UI
             statusText.innerText = "Analyse par Gemini...";
             statusText.classList.replace('text-red-500', 'text-blue-500');
             recordingWave.classList.add('hidden');
-            micBtn.classList.replace('bg-red-600', 'bg-blue-600');
+
+            // Démarrer l'animation des couleurs Google
+            startGoogleColorAnimation();
         }
 
         async function processAudio() {
@@ -130,22 +206,45 @@
                 ]);
 
                 const text = result.response.text();
-                
+
+                // Arrêter l'animation des couleurs Google
+                stopGoogleColorAnimation();
+
                 // Affichage et copie
                 resultArea.value = text;
                 await navigator.clipboard.writeText(text);
-                
+
                 statusText.innerText = "Terminé & Copié !";
                 statusText.classList.replace('text-blue-500', 'text-green-600');
+                setButtonColor('bg-green-600', 'hover:bg-green-700');
+
                 setTimeout(() => {
                     statusText.innerText = "Prêt à enregistrer";
                     statusText.classList.replace('text-green-600', 'text-slate-500');
+                    setButtonColor('bg-green-600', 'hover:bg-green-700');
                 }, 3000);
 
             } catch (err) {
-                console.error(err);
+                console.error("Erreur Gemini:", err);
+
+                // Arrêter l'animation des couleurs Google
+                stopGoogleColorAnimation();
+
                 statusText.innerText = "Erreur de traitement";
-                alert("Erreur Gemini : " + err.message);
+                statusText.classList.replace('text-blue-500', 'text-red-500');
+                setButtonColor('bg-red-600', 'hover:bg-red-700');
+
+                if (err.message && err.message.includes("API_KEY")) {
+                    alert("Clé API invalide. Vérifiez votre clé Gemini.");
+                } else {
+                    alert("Erreur lors du traitement de l'audio. Réessayez.");
+                }
+
+                setTimeout(() => {
+                    statusText.innerText = "Prêt à enregistrer";
+                    statusText.classList.replace('text-red-500', 'text-slate-500');
+                    setButtonColor('bg-green-600', 'hover:bg-green-700');
+                }, 3000);
             }
         }
     </script>
